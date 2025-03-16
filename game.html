@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    :root {
+      --dark-cell: #769656;
+      --light-cell: #eeeed2;
+      --red-checker: #c54b4b;
+      --black-checker: #2e2e2e;
+    }
+
+    .board {
+      width: 560px;
+      height: 560px;
+      border: 2px solid #4b4b4b;
+      background: var(--light-cell);
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+    }
+
+    .cell {
+      position: relative;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cell.dark {
+      background: var(--dark-cell);
+    }
+
+    .checker {
+      width: 45px;
+      height: 45px;
+      border-radius: 50%;
+      cursor: pointer;
+      transition: transform 0.2s;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    }
+
+    .checker.red {
+      background: var(--red-checker);
+      background: radial-gradient(circle at 65% 25%, #fff3, transparent 60%),
+                  linear-gradient(to bottom, #d86363, var(--red-checker));
+    }
+
+    .checker.black {
+      background: var(--black-checker);
+      background: radial-gradient(circle at 65% 25%, #fff3, transparent 60%),
+                  linear-gradient(to bottom, #555, var(--black-checker));
+    }
+
+    .selected {
+      transform: scale(1.1);
+      box-shadow: 0 0 12px #ffeb3b;
+    }
+
+    .possible-move::after {
+      content: "";
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: #ffeb3b66;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <div class="board" id="board"></div>
+
+  <script>
+    class ClassicCheckers {
+      constructor() {
+        this.board = document.getElementById('board');
+        this.currentPlayer = 'red';
+        this.selectedPiece = null;
+        this.initGame();
+      }
+
+      initGame() {
+        this.createBoard();
+        this.addEventListeners();
+      }
+
+      createBoard() {
+        this.board.innerHTML = '';
+        for(let row = 0; row < 8; row++) {
+          for(let col = 0; col < 8; col++) {
+            const cell = document.createElement('div');
+            cell.className = `cell ${(row + col) % 2 ? 'dark' : 'light'}`;
+            cell.dataset.pos = `${row},${col}`;
+            
+            if((row + col) % 2) {
+              if(row < 3) this.createChecker(cell, 'black');
+              if(row > 4) this.createChecker(cell, 'red');
+            }
+            
+            this.board.appendChild(cell);
+          }
+        }
+      }
+
+      createChecker(cell, color) {
+        const checker = document.createElement('div');
+        checker.className = `checker ${color}`;
+        checker.dataset.king = "false";
+        cell.appendChild(checker);
+      }
+
+      addEventListeners() {
+        this.board.addEventListener('click', e => {
+          const cell = e.target.closest('.cell');
+          const checker = e.target.closest('.checker');
+          
+          if(checker) this.handleCheckerClick(checker);
+          else if(cell) this.handleCellClick(cell);
+        });
+      }
+
+      handleCheckerClick(checker) {
+        if(checker.classList.contains(this.currentPlayer)) {
+          this.selectChecker(checker);
+        }
+      }
+
+      selectChecker(checker) {
+        this.clearSelection();
+        this.selectedPiece = checker;
+        checker.classList.add('selected');
+        this.showMoves(checker);
+      }
+
+      showMoves(checker) {
+        const [row, col] = checker.parentElement.dataset.pos.split(',').map(Number);
+        const isKing = checker.dataset.king === "true";
+        
+        this.getValidMoves(row, col, isKing).forEach(([r, c]) => {
+          document.querySelector(`[data-pos="${r},${c}"]`).classList.add('possible-move');
+        });
+      }
+
+      getValidMoves(row, col, isKing) {
+        const moves = [];
+        const directions = this.getDirections(isKing);
+        
+        directions.forEach(([dr, dc]) => {
+          if(this.isEmpty(row + dr, col + dc)) {
+            moves.push([row + dr, col + dc]);
+          }
+          if(this.canCapture(row, col, dr, dc)) {
+            moves.push([row + dr*2, col + dc*2]);
+          }
+        });
+        
+        return moves.filter(([r, c]) => r >= 0 && r < 8 && c >= 0 && c < 8);
+      }
+
+      getDirections(isKing) {
+        const base = this.currentPlayer === 'red' ? 
+          [[-1, -1], [-1, 1]] : 
+          [[1, -1], [1, 1]];
+        return isKing ? [...base, [1, 1], [1, -1], [-1, 1], [-1, -1]] : base;
+      }
+
+      isEmpty(r, c) {
+        const cell = document.querySelector(`[data-pos="${r},${c}"]`);
+        return cell && !cell.querySelector('.checker');
+      }
+
+      canCapture(r, c, dr, dc) {
+        const midCell = document.querySelector(`[data-pos="${r + dr},${c + dc}"]`);
+        const targetCell = document.querySelector(`[data-pos="${r + dr*2},${c + dc*2}"]`);
+        
+        return midCell?.querySelector('.checker') && 
+               !midCell.querySelector(`.${this.currentPlayer}`) && 
+               targetCell && 
+               !targetCell.querySelector('.checker');
+      }
+
+      handleCellClick(cell) {
+        if(!this.selectedPiece) return;
+        
+        const [fromR, fromC] = this.selectedPiece.parentElement.dataset.pos.split(',').map(Number);
+        const [toR, toC] = cell.dataset.pos.split(',').map(Number);
+        
+        if(this.isValidMove(fromR, fromC, toR, toC)) {
+          this.movePiece(cell);
+          this.checkPromotion(toR);
+          this.switchTurn();
+        }
+        
+        this.clearSelection();
+      }
+
+      isValidMove(fromR, fromC, toR, toC) {
+        const dr = toR - fromR;
+        const dc = toC - fromC;
+        const isKing = this.selectedPiece.dataset.king === "true";
+        
+        if(!isKing && ((this.currentPlayer === 'red' && dr > 0) || 
+           (this.currentPlayer === 'black' && dr < 0))) return false;
+        
+        if(Math.abs(dr) === 2) {
+          const midR = fromR + dr/2;
+          const midC = fromC + dc/2;
+          const midCell = document.querySelector(`[data-pos="${midR},${midC}"]`);
+          return midCell?.querySelector('.checker') && 
+                 !midCell.querySelector(`.${this.currentPlayer}`);
+        }
+        
+        return Math.abs(dr) === 1 && Math.abs(dc) === 1;
+      }
+
+      movePiece(targetCell) {
+        const checker = this.selectedPiece;
+        if(Math.abs(targetCell.dataset.pos[0] - checker.parentElement.dataset.pos[0]) === 2) {
+          const midR = (parseInt(targetCell.dataset.pos[0]) + parseInt(checker.parentElement.dataset.pos[0]))/2;
+          const midC = (parseInt(targetCell.dataset.pos[2]) + parseInt(checker.parentElement.dataset.pos[2]))/2;
+          document.querySelector(`[data-pos="${midR},${midC}"]`).querySelector('.checker').remove();
+        }
+        targetCell.appendChild(checker);
+      }
+
+      checkPromotion(row) {
+        if((this.currentPlayer === 'red' && row === 0) || 
+           (this.currentPlayer === 'black' && row === 7)) {
+          this.selectedPiece.dataset.king = "true";
+          this.selectedPiece.style.background = `radial-gradient(circle at 50% 15%, gold, ${this.currentPlayer === 'red' ? '#c54b4b' : '#2e2e2e'})`;
+        }
+      }
+
+      switchTurn() {
+        this.currentPlayer = this.currentPlayer === 'red' ? 'black' : 'red';
+      }
+
+      clearSelection() {
+        document.querySelectorAll('.selected, .possible-move').forEach(el => {
+          el.classList.remove('selected', 'possible-move');
+        });
+        this.selectedPiece = null;
+      }
+    }
+
+    new ClassicCheckers();
+  </script>
+</body>
+</html>

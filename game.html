@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Типо шашки</title>
+  <style>
+    :root {
+      --board-color: #2c3e50;
+      --dark-cell: #34495e;
+      --light-cell: #ecf0f1;
+    }
+
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #f39c12;
+      font-family: Arial, sans-serif;
+    }
+
+    .game-container {
+      text-align: center;
+    }
+
+    .board {
+      width: 560px;
+      height: 560px;
+      border: 3px solid var(--board-color);
+      border-radius: 8px;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      box-shadow: 0 0 20px rgba(0,0,0,0.3);
+    }
+
+    .cell {
+      width: 70px;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      position: relative;
+      transition: transform 0.2s;
+    }
+
+    .cell.dark {
+      background: var(--dark-cell);
+    }
+
+    .cell.light {
+      background: var(--light-cell);
+    }
+
+    .checker {
+      width: 50px;
+      height: 50px;
+      border-radius: 50%;
+      border: 2px solid #000;
+      transition: all 0.3s;
+      position: relative;
+      z-index: 1;
+    }
+
+    .checker.red {
+      background: #e74c3c;
+    }
+
+    .checker.black {
+      background: #2c3e50;
+    }
+
+    .checker.king::after {
+      content: "♔";
+      font-size: 24px;
+      color: gold;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    .selected {
+      box-shadow: 0 0 15px 5px #f1c40f;
+    }
+
+    .possible-move {
+      background: rgba(46, 204, 113, 0.3) !important;
+    }
+
+    .status {
+      margin: 20px 0;
+      font-size: 24px;
+      color: white;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <div class="status" id="status">Ход: Красные</div>
+    <div class="board" id="board"></div>
+  </div>
+
+  <script>
+    class CheckersGame {
+      constructor() {
+        this.board = document.getElementById('board');
+        this.status = document.getElementById('status');
+        this.selectedPiece = null;
+        this.currentPlayer = 'red';
+        this.mustCapture = false;
+        
+        this.initializeBoard();
+        this.addEventListeners();
+      }
+
+      initializeBoard() {
+        this.board.innerHTML = '';
+        this.cells = [];
+        
+        for(let row = 0; row < 8; row++) {
+          for(let col = 0; col < 8; col++) {
+            const cell = document.createElement('div');
+            cell.className = `cell ${(row + col) % 2 ? 'dark' : 'light'}`;
+            cell.dataset.row = row;
+            cell.dataset.col = col;
+
+            if((row + col) % 2 && row < 3) {
+              cell.innerHTML = '<div class="checker red"></div>';
+            } else if((row + col) % 2 && row > 4) {
+              cell.innerHTML = '<div class="checker black"></div>';
+            }
+
+            this.cells.push(cell);
+            this.board.appendChild(cell);
+          }
+        }
+      }
+
+      addEventListeners() {
+        this.board.addEventListener('click', (e) => this.handleClick(e));
+      }
+
+      handleClick(e) {
+        const cell = e.target.closest('.cell');
+        if(!cell) return;
+
+        const piece = cell.querySelector('.checker');
+        
+        if(piece && piece.classList.contains(this.currentPlayer)) {
+          this.selectPiece(cell, piece);
+        } else if(this.selectedPiece) {
+          this.movePiece(cell);
+        }
+      }
+
+      selectPiece(selectedCell, piece) {
+        if(this.selectedPiece) {
+          this.selectedPiece.classList.remove('selected');
+          this.clearHighlights();
+        }
+
+        this.selectedPiece = selectedCell;
+        piece.classList.add('selected');
+        this.showPossibleMoves(selectedCell);
+      }
+
+      showPossibleMoves(cell) {
+        this.clearHighlights();
+        const row = parseInt(cell.dataset.row);
+        const col = parseInt(cell.dataset.col);
+        const piece = cell.querySelector('.checker');
+        const isKing = piece.classList.contains('king');
+        const moves = this.getValidMoves(row, col, isKing);
+        moves.forEach(([r, c]) => {
+          this.cells[r * 8 + c].classList.add('possible-move');
+        });
+      }
+
+      getValidMoves(row, col, isKing) {
+        const moves = [];
+        const directions = this.currentPlayer === 'red' ? 
+          (isKing ? [-1, 1] : [1]) : 
+          (isKing ? [-1, 1] : [-1]);
+
+        directions.forEach(dRow => {
+          [-1, 1].forEach(dCol => {
+            const newRow = row + dRow;
+            const newCol = col + dCol;
+            if(this.isValidPosition(newRow, newCol) && 
+               !this.cells[newRow * 8 + newCol].querySelector('.checker')) {
+              moves.push([newRow, newCol]);
+            }
+            const jumpRow = row + dRow * 2;
+            const jumpCol = col + dCol * 2;
+            const middleRow = row + dRow;
+            const middleCol = col + dCol;
+            
+            if(this.isValidPosition(jumpRow, jumpCol) && 
+               !this.cells[jumpRow * 8 + jumpCol].querySelector('.checker')) {
+              const middleCell = this.cells[middleRow * 8 + middleCol];
+              const middlePiece = middleCell.querySelector('.checker');
+              
+              if(middlePiece && !middlePiece.classList.contains(this.currentPlayer)) {
+                moves.push([jumpRow, jumpCol]);
+              }
+            }
+          });
+        });
+
+        return moves;
+      }
+
+      movePiece(targetCell) {
+        const fromRow = parseInt(this.selectedPiece.dataset.row);
+        const fromCol = parseInt(this.selectedPiece.dataset.col);
+        const toRow = parseInt(targetCell.dataset.row);
+        const toCol = parseInt(targetCell.dataset.col);
+        
+        if(this.isValidMove(fromRow, fromCol, toRow, toCol)) {
+          const piece = this.selectedPiece.querySelector('.checker');
+          targetCell.appendChild(piece);
+          if((this.currentPlayer === 'red' && toRow === 7) || 
+             (this.currentPlayer === 'black' && toRow === 0)) {
+            piece.classList.add('king');
+          }
+          if(Math.abs(toRow - fromRow) === 2) {
+            const middleRow = (fromRow + toRow)/2;
+            const middleCol = (fromCol + toCol)/2;
+            this.cells[middleRow * 8 + middleCol].innerHTML = '';
+          }
+
+          this.switchPlayer();
+        }
+
+        this.clearHighlights();
+        this.selectedPiece.classList.remove('selected');
+        this.selectedPiece = null;
+      }
+
+      isValidMove(fromRow, fromCol, toRow, toCol) {
+        if(!this.isValidPosition(toRow, toCol)) return false;
+        if(this.cells[toRow * 8 + toCol].querySelector('.checker')) return false;
+        const piece = this.cells[fromRow * 8 + fromCol].querySelector('.checker');
+        const isKing = piece.classList.contains('king');
+        const direction = this.currentPlayer === 'red' ? 1 : -1;
+        
+        if(!isKing && (toRow - fromRow) * direction < 0) return false;
+        const rowDiff = Math.abs(toRow - fromRow);
+        const colDiff = Math.abs(toCol - fromCol);
+        
+        if(rowDiff !== colDiff) return false;
+        if(rowDiff > 2) return false;
+        if(rowDiff === 2) {
+          const middleRow = (fromRow + toRow)/2;
+          const middleCol = (fromCol + toCol)/2;
+          const middleCell = this.cells[middleRow * 8 + middleCol];
+          const middlePiece = middleCell.querySelector('.checker');
+          
+          if(!middlePiece || middlePiece.classList.contains(this.currentPlayer)) {
+            return false;
+          }
+        }
+
+        return true;
+      }
+
+      switchPlayer() {
+        this.currentPlayer = this.currentPlayer === 'red' ? 'black' : 'red';
+        this.status.textContent = `Ход: ${this.currentPlayer === 'red' ? 'Красные' : 'Чёрные'}`;
+      }
+
+      clearHighlights() {
+        this.cells.forEach(cell => cell.classList.remove('possible-move'));
+      }
+
+      isValidPosition(row, col) {
+        return row >= 0 && row < 8 && col >= 0 && col < 8;
+      }
+    }
+    new CheckersGame();
+  </script>
+</body>
+</html>

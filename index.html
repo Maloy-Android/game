@@ -10,10 +10,10 @@
         </div>
       </div>
       
-      <button class="neon-button" id="startButton">
-        <a href="game.html" class="neon-text">Играть</a>
+      <a href="game.html" class="neon-button" id="startButton">
+        <span class="neon-text">Играть</span>
         <div class="neon-border"></div>
-      </button>
+      </a>
     </div>
 
     <style>
@@ -80,11 +80,10 @@
       }
   
       .neon-button {
-        position: relative;
+        display: inline-block;
         padding: 20px 50px;
-        background: transparent;
-        border: none;
-        cursor: pointer;
+        text-decoration: none;
+        position: relative;
         transition: 0.5s;
       }
   
@@ -110,7 +109,6 @@
         animation: border-pulse 2s ease-in-out infinite;
       }
   
-      /* Анимации */
       @keyframes letter-float {
         0%, 100% { transform: translateY(0); }
         50% { transform: translateY(-20px); }
@@ -132,13 +130,14 @@
     </style>
   
     <script>
-      document.getElementById('startButton').addEventListener('click', () => {
+      document.getElementById('startButton').addEventListener('click', function(e) {
+        e.preventDefault();
+        
         document.getElementById('startScreen').style.opacity = '0';
+        
         setTimeout(() => {
-          document.getElementById('startScreen').classList.add('hidden');
-          document.getElementById('gameContainer').classList.remove('hidden');
-          new ClassicCheckers();
+          window.location.href = this.href;
         }, 500);
       });
     </script>
-  </body>
+</body>
